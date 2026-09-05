@@ -1,0 +1,19 @@
+{
+  "model": {
+    "base_url": "https://api.deepseek.com/anthropic",
+    "api_key": "在此填入你的 DeepSeek API Key（sk-...）",
+    "model_name": "deepseek-v4-flash-vision-exp",
+    "max_tokens": 2048,
+    "max_side": 960,
+    "reasoning_effort": "high",
+    "system_prompt": "你是解题助手。先直接给出最终答案，再附上简洁的关键解题过程（分步骤，每步一两句话，只要大致思路，不逐字展开）。不要重复题目原文，不要无关废话。"
+  },
+  "wecom_bot": {
+    "bot_id": "在此填入机器人 bot_id",
+    "secret": "在此填入机器人 secret",
+    "ws_url": "wss://openws.work.weixin.qq.com"
+  },
+  "hotkey": "ctrl+alt+s",
+  "capture_mode": "region",
+  "user_prompt": "请分析截图中的题目：先给最终答案，再简要列出大致解题过程（几步即可）。不要重复题目原文，不要啰嗦。"
+}
