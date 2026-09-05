@@ -6,7 +6,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078d6)
 
-参考 [OfferBiye](https://offerbiye.com) 的工作方式，用**企业微信智能机器人「长连接」模式**实现：本地程序通过 WebSocket 直接充当机器人，**无需公网服务器、无需回调地址、无需消息加解密**，开机即可用。
+本项目为**原生开源项目**，核心方案是用**企业微信智能机器人「长连接」模式**：本地程序通过 WebSocket 直接充当机器人，**无需公网服务器、无需回调地址、无需消息加解密**，开机即可用。
 
 ---
 
