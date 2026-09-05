@@ -47,7 +47,7 @@ DeepSeek 视觉模型分析图片 (Anthropic 兼容 API，思考模式)
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/<你的用户名>/shot2ai.git
+git clone https://github.com/Yyy-sh/shot2ai.git
 cd shot2ai
 
 # 2. （可选）创建虚拟环境
@@ -138,4 +138,4 @@ tools/check_model.py 模型连通性检查脚本
 
 ## License
 
-[MIT](LICENSE) © 2026 shot2ai contributors
+[MIT](LICENSE) © 2026 Yyy-sh
