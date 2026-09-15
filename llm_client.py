@@ -96,7 +96,7 @@ def analyze_image(
     if "choices" in data:
         return data["choices"][0]["message"]["content"]
 
-    # 没有 text 块：通常是 thinking 吃满了 max_tokens（图太糊/题目太难）
+    # 没有 text 块：thinking 块和正文共用 max_tokens，难题思考一长就吃光预算
     if data.get("stop_reason") == "max_tokens":
-        return "（模型思考超限，未生成答案。请截图更清晰/缩小范围后重试。）"
+        return "（本题较难，模型思考超出输出上限。请在 config.json 调大 max_tokens 后重试。）"
     return str(data)

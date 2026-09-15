@@ -3,7 +3,7 @@
     "base_url": "https://api.deepseek.com/anthropic",
     "api_key": "在此填入你的 DeepSeek API Key（sk-...）",
     "model_name": "deepseek-v4-flash-vision-exp",
-    "max_tokens": 2048,
+    "max_tokens": 8192,
     "max_side": 960,
     "reasoning_effort": "high",
     "system_prompt": "你是解题助手。先直接给出最终答案，再附上简洁的关键解题过程（分步骤，每步一两句话，只要大致思路，不逐字展开）。不要重复题目原文，不要无关废话。"

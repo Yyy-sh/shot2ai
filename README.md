@@ -134,6 +134,7 @@ config.example.json  配置模板（脱敏）
 requirements.txt     依赖
 run.bat              Windows 一键启动（conda）
 tools/check_model.py 模型连通性检查脚本
+tools/check_deadline.py 60 秒硬截止逻辑自检
 ```
 
 ## ❓ 常见问题
@@ -141,7 +142,7 @@ tools/check_model.py 模型连通性检查脚本
 - **没有收到机器人推送**：必须先在企微里给机器人**发一条消息**，机器人才可主动推送。
 - **图片发送失败**：代码已压缩为 JPEG 且控制在 2MB 内；仍失败请缩小框选范围。
 - **模型 400/401 错误**：确认 `model.api_key` 有效、`base_url` 与模型匹配。
-- **模型不输出答案**：通常是截图太糊或题目过难导致思考超限；请截得更清晰、缩小范围，或调大 `max_tokens`。
+- **模型不输出答案**：思考块与正文**共用 `max_tokens`**，难题思考一长就吃光预算。调大 `max_tokens`（默认 8192）即可，与截图清晰度无关。
 - **高分屏框选偏移**：代码已做 DPI 感知；仍有问题可把 Windows 显示缩放设为 100%。
 - **连接频繁断开**：程序内置 30 秒心跳 + 指数退避重连；持续失败请检查网络或 `bot_id/secret`。
 
@@ -151,6 +152,7 @@ tools/check_model.py 模型连通性检查脚本
 - **图片上传**：`aibot_upload_media_init` → 分片 `chunk`（≤512KB）→ `finish` 拿 `media_id` → 发 `image` 消息。
 - **思考模式**：`thinking: {"type": "enabled"}` + `output_config.effort`。关闭思考会导致推理题算错，务必开启。
 - **防失焦截图**：先 `ImageGrab.grab()` 静默全屏截图，再弹无焦点遮罩（`WS_EX_NOACTIVATE`）框选，全程不抢焦点。
+- **60 秒硬截止**：从截图进入处理开始计时，模型请求超时与等待均对齐同一截止时间；超时则发提示、**绝不推送迟到的答案**。
 
 ## 📄 License
 
