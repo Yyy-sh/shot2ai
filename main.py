@@ -57,8 +57,19 @@ def load_config() -> dict:
     return cfg
 
 
+# 从进入处理到答案发出，硬上限 60 秒；留 2 秒余量给企微发送
+DEADLINE_S = 60
+SEND_RESERVE_S = 2
+
+
 def process_and_reply(bot: WeComBot, cfg: dict, img) -> None:
     """截图 → 并行（发图到企微 + 调模型分析）→ 回复答案。"""
+    start = time.time()
+
+    def remaining() -> float:
+        """距离硬截止还剩多少秒（含发送余量扣减）。"""
+        return DEADLINE_S - SEND_RESERVE_S - (time.time() - start)
+
     m = cfg["model"]
     chat = bot.get_user_chat()
     if not chat:
@@ -90,6 +101,7 @@ def process_and_reply(bot: WeComBot, cfg: dict, img) -> None:
                 max_tokens=m["max_tokens"],
                 max_side=m.get("max_side", 960),
                 reasoning_effort=m.get("reasoning_effort", "high"),
+                timeout=max(5, remaining()),   # 请求超时与总截止时间对齐
             )
         except Exception as e:
             answer_holder["error"] = e
@@ -97,19 +109,24 @@ def process_and_reply(bot: WeComBot, cfg: dict, img) -> None:
     t_analyze = threading.Thread(target=analyze, daemon=True)
     t_analyze.start()
 
-    # 线程A：发图到企微（与模型分析并行）
-    try:
-        print("[企微] 发送截图 ...")
-        bot.send_image(target, chat_type, img_bytes, "screenshot.jpg")
-        bot.send_markdown(target, chat_type, "🤖 已收到截图，正在分析 ...")
-    except Exception as e:
-        print(f"[企微] 发图出错（不影响分析）: {e}")
+    # 线程A：发图到企微（与模型分析并行；最多等 10 秒，避免上传卡死拖垮 60 秒保证）
+    def send_shot():
+        try:
+            print("[企微] 发送截图 ...")
+            bot.send_image(target, chat_type, img_bytes, "screenshot.jpg")
+            bot.send_markdown(target, chat_type, "🤖 已收到截图，正在分析 ...")
+        except Exception as e:
+            print(f"[企微] 发图出错（不影响分析）: {e}")
 
-    # 等模型分析完，发答案（最多等58秒，确保整体不超60秒）
+    t_send = threading.Thread(target=send_shot, daemon=True)
+    t_send.start()
+    t_send.join(timeout=min(10, max(0.1, remaining())))
+
+    # 等模型分析完，发答案（最多等到硬截止，确保整体不超 60 秒）
     print("[模型] 等待分析结果 ...")
-    t_analyze.join(timeout=65)
+    t_analyze.join(timeout=max(0.1, remaining()))
     if t_analyze.is_alive():
-        answer_holder["error"] = "模型分析超时（>58秒），请重试或缩小截图范围"
+        answer_holder["error"] = f"分析超过 {DEADLINE_S} 秒未完成，已放弃本次答案"
     if answer_holder["error"]:
         err = answer_holder["error"]
         print(f"❌ 模型出错: {err}")
