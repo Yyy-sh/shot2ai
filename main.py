@@ -180,7 +180,7 @@ def main() -> None:
                 print(f"截图尺寸: {img.size}")
                 # 模型调用 + 推送放到后台线程，不阻塞主线程
                 threading.Thread(target=process_and_reply, args=(bot, cfg, img), daemon=True).start()
-            time.sleep(0.15)
+            time.sleep(0.01)  # 尽快响应快捷键：盲拖模式没有视觉提示，慢了就漏掉起手按下
     except KeyboardInterrupt:
         print("\n已退出。")
     finally:
