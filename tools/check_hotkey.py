@@ -49,6 +49,10 @@ def expect(label: str, got, want) -> None:
 expect("单键 f8", fires("f8", [K.f8]), 1)
 expect("单键 f9", fires("f9", [K.f9]), 1)
 expect("单键 f12", fires("f12", [K.f12]), 1)
+# 字母走 KeyCode.from_char 分支，和 F 键的 getattr(Key, ...) 是两条路径
+# 注意：单键字母会全局劫持该键，任何地方打字都会触发，一般别这么配
+expect("单键 q", fires("q", [C("q")]), 1)
+expect("单键 q 按 w", fires("q", [C("w")]), 0)
 expect("组合 ctrl+alt+s", fires("ctrl+alt+s", [K.ctrl, K.alt, C("s")]), 1)
 expect("组合 alt+s", fires("alt+s", [K.alt, C("s")]), 1)
 expect("f8 配置按 f9", fires("f8", [K.f9]), 0)
