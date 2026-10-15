@@ -110,7 +110,7 @@ copy config.example.json config.json
 | `model.max_side` | 图片压缩长边（像素），越小越快，默认 960 |
 | `wecom_bot.bot_id` | 企微智能机器人 ID |
 | `wecom_bot.secret` | 企微智能机器人密钥 |
-| `hotkey` | 截图快捷键，默认 `ctrl+alt+s` |
+| `hotkey` | 截图快捷键，可单键也可组合，如 `f8` / `alt+s` / `ctrl+alt+s`。单键请只用 F1–F12 这类不用于打字的键，别填字母数字（会全局劫持输入） |
 | `capture_mode` | `region` 框选 / `blind` 盲拖 / `fixed` 固定区域 / `fullscreen` 全屏 |
 | `capture_bbox` | 仅 `fixed` 模式用，`[左, 上, 右, 下]` 物理像素，由 `tools/pick_region.py` 生成 |
 
