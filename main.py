@@ -173,8 +173,7 @@ def main() -> None:
             if signals:
                 signals.pop()
                 # 截图必须在主线程做（tkinter）
-                mode = cfg.get("capture_mode", "region")
-                img = capture.capture_region() if mode == "region" else capture.capture_fullscreen()
+                img = capture.grab(cfg)
                 if img is None:
                     print("已取消截图。\n")
                     continue

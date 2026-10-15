@@ -111,9 +111,25 @@ copy config.example.json config.json
 | `wecom_bot.bot_id` | 企微智能机器人 ID |
 | `wecom_bot.secret` | 企微智能机器人密钥 |
 | `hotkey` | 截图快捷键，默认 `ctrl+alt+s` |
-| `capture_mode` | `region` 框选 / `fullscreen` 全屏 |
+| `capture_mode` | `region` 框选 / `fixed` 固定区域 / `fullscreen` 全屏 |
+| `capture_bbox` | 仅 `fixed` 模式用，`[左, 上, 右, 下]` 物理像素，由 `tools/pick_region.py` 生成 |
 
 > 🔒 **`config.json` 含密钥，已被 `.gitignore` 排除，切勿提交到公开仓库。**
+
+### 🫥 无感截图（屏幕零变化）
+
+`region` 模式框选时会短暂出现一层半透明遮罩。若想让截图**完全看不出任何变化**，二选一：
+
+- **`fullscreen`**：全屏截图，改个配置即可，适合题目区域不固定的场景。
+- **`fixed`**：只截固定一块区域，延迟更低、图更小、识别更准。先校准一次坐标：
+
+  ```bash
+  python tools/pick_region.py     # 框选题目区域，自动写入 capture_bbox 并切到 fixed
+  ```
+
+  之后按快捷键截图不再弹任何窗口。**换分辨率、挪窗口或缩放网页后需重新校准。**
+
+两种模式都不创建窗口、不抢焦点，屏幕上不会出现任何可见变化。
 
 ### 获取企微机器人 bot_id / secret
 
@@ -142,7 +158,7 @@ python main.py
 
 ```
 main.py              主入口：快捷键监听 + 截图编排 + 模型调用
-capture.py           截图：静默全屏 + 无焦点框选（防失焦检测）
+capture.py           截图：框选 / 固定区域 / 全屏，后两种零窗口零屏幕变化
 llm_client.py        视觉模型调用（Anthropic 兼容 API）
 wecom_bot.py         企微智能机器人长连接客户端（WebSocket）
 config.example.json  配置模板（脱敏）
@@ -150,6 +166,7 @@ requirements.txt     依赖
 run.bat              Windows 一键启动（conda）
 tools/check_model.py 模型连通性检查脚本
 tools/check_deadline.py 60 秒硬截止逻辑自检
+tools/pick_region.py 固定截图区域校准（配合 capture_mode=fixed）
 ```
 
 ## ❓ 常见问题
@@ -158,6 +175,7 @@ tools/check_deadline.py 60 秒硬截止逻辑自检
 - **图片发送失败**：代码已压缩为 JPEG 且控制在 2MB 内；仍失败请缩小框选范围。
 - **模型 400/401 错误**：确认 `model.api_key` 有效、`base_url` 与模型匹配。
 - **模型不输出答案**：思考块与正文**共用 `max_tokens`**，难题思考一长就吃光预算。调大 `max_tokens`（默认 8192）即可，与截图清晰度无关。
+- **截图时屏幕会变灰**：那是 `region` 模式的框选遮罩，属正常现象。想要屏幕零变化，见上面「[无感截图](#-无感截图屏幕零变化)」。
 - **高分屏框选偏移**：代码已做 DPI 感知；仍有问题可把 Windows 显示缩放设为 100%。
 - **连接频繁断开**：程序内置 30 秒心跳 + 指数退避重连；持续失败请检查网络或 `bot_id/secret`。
 
@@ -166,7 +184,7 @@ tools/check_deadline.py 60 秒硬截止逻辑自检
 - **企微长连接协议**：`aibot_subscribe` 鉴权 → 30s `ping` 心跳 → `aibot_msg_callback` 收消息 → `aibot_send_msg` 主动发送；响应帧用 `headers.req_id` 关联。
 - **图片上传**：`aibot_upload_media_init` → 分片 `chunk`（≤512KB）→ `finish` 拿 `media_id` → 发 `image` 消息。
 - **思考模式**：`thinking: {"type": "enabled"}` + `output_config.effort`。关闭思考会导致推理题算错，务必开启。
-- **防失焦截图**：先 `ImageGrab.grab()` 静默全屏截图，再弹无焦点遮罩（`WS_EX_NOACTIVATE`）框选，全程不抢焦点。
+- **防失焦截图**：先 `ImageGrab.grab()` 静默全屏截图，再弹无焦点遮罩（`WS_EX_NOACTIVATE`）框选，全程不抢焦点。想连遮罩都不要就用 `fixed` / `fullscreen`，完全不创建窗口。
 - **60 秒硬截止**：从截图进入处理开始计时，模型请求超时与等待均对齐同一截止时间；超时则发提示、**绝不推送迟到的答案**。
 
 ## 📄 License

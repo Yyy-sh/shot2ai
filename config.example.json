@@ -15,5 +15,8 @@
   },
   "hotkey": "ctrl+alt+s",
   "capture_mode": "region",
+  "_capture_mode_note": "region=框选（有半透明遮罩）；fixed=固定区域，屏幕零变化，需 capture_bbox；fullscreen=全屏，屏幕零变化",
+  "capture_bbox": null,
+  "_capture_bbox_note": "capture_mode=fixed 时生效，格式 [左, 上, 右, 下] 物理像素。跑 python tools/pick_region.py 自动生成，别手填",
   "user_prompt": "请解答截图中的行测题目：先给答案，再给简要速解思路。"
 }

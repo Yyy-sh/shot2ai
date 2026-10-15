@@ -1,10 +1,11 @@
-"""截图模块：静默全屏截图 + 无焦点裁剪窗口（不触发网页失焦检测）。
+"""截图模块：三种模式，按 config 的 capture_mode 选择。
 
-核心思路：
-  1. 按快捷键后先用 ImageGrab.grab() 全屏截图（不创建窗口、不抢焦点），
-     题目已悄悄存入内存 —— 此时浏览器不会失焦，不触发防作弊警告。
-  2. 然后才弹出裁剪窗口框选；窗口设 WS_EX_NOACTIVATE 不抢焦点，警告都不会弹。
-  3. 框选完从已截图裁剪，不需要第二次截图。
+  region     —— 框选。先静默全屏截图，再弹无焦点遮罩（WS_EX_NOACTIVATE）框选，
+                从已截图裁剪。屏幕会短暂出现半透明遮罩。
+  fixed      —— 固定区域。不创建任何窗口，屏幕**零变化**（推荐，需先校准）。
+  fullscreen —— 全屏。不创建任何窗口，屏幕**零变化**。
+
+fixed / fullscreen 全程不弹窗、不抢焦点，屏幕看不出任何变化。
 """
 import ctypes
 import time
@@ -54,22 +55,16 @@ def capture_fullscreen() -> Image.Image:
     return ImageGrab.grab()
 
 
-def capture_region() -> Optional[Image.Image]:
-    """静默全屏截图 + 无焦点裁剪窗口框选。
+def pick_bbox(sw: Optional[int] = None, sh: Optional[int] = None) -> Optional[tuple]:
+    """弹无焦点遮罩窗口让用户框选，返回 (left, top, right, bottom)。
 
-    流程：
-      1. ImageGrab.grab() 全屏截图（不抢焦点，题目已存内存）
-      2. 弹无焦点遮罩窗口框选（不抢焦点，不触发失焦警告）
-      3. 从已截图裁剪，返回题目区域
+    ESC 取消或区域过小则返回 None。窗口设 WS_EX_NOACTIVATE 不抢焦点，
+    浏览器不会失焦。
     """
     _setup_dpi_awareness()
-    time.sleep(0.05)  # 等快捷键释放，避免截到按键状态
+    if sw is None or sh is None:
+        sw, sh = ImageGrab.grab().size
 
-    # —— 步骤1：静默全屏截图（此刻不创建任何窗口，浏览器不失焦）——
-    full = ImageGrab.grab()
-    sw, sh = full.size
-
-    # —— 步骤2：弹无焦点遮罩窗口框选 ——
     root = tk.Tk()
     root.geometry(f"{sw}x{sh}+0+0")
     root.overrideredirect(True)        # 无边框
@@ -126,8 +121,50 @@ def capture_region() -> Optional[Image.Image]:
 
     bbox = state["bbox"]
     root.destroy()
+    return bbox
+
+
+def capture_region() -> Optional[Image.Image]:
+    """静默全屏截图 + 无焦点遮罩框选（屏幕会短暂出现半透明遮罩）。
+
+    1. 先 ImageGrab.grab() 全屏截图（不创建窗口、不抢焦点，题目已存内存）
+    2. 再弹遮罩框选，从已截的图裁剪，不二次截图
+    """
+    _setup_dpi_awareness()
+    time.sleep(0.05)  # 等快捷键释放，避免截到按键状态
+    full = ImageGrab.grab()
+
+    bbox = pick_bbox(*full.size)
     if bbox is None:
         return None
-
-    # —— 步骤3：从已截的全屏图裁剪（不再次截图）——
     return full.crop(bbox)
+
+
+def capture_fixed(bbox) -> Image.Image:
+    """静默截取屏幕固定区域 —— 不创建任何窗口，屏幕全程零变化。
+
+    bbox=(left, top, right, bottom)，物理像素（进程已 DPI 感知）。
+    坐标用 tools/pick_region.py 校准一次即可。
+    """
+    _setup_dpi_awareness()
+    time.sleep(0.05)  # 等快捷键释放，避免截到按键状态
+    return ImageGrab.grab(bbox=tuple(bbox))
+
+
+def grab(cfg: dict) -> Optional[Image.Image]:
+    """按 config 的 capture_mode 截图。
+
+    region     框选（有半透明遮罩）
+    fixed      固定区域，需 capture_bbox（无窗口，屏幕零变化）
+    fullscreen 全屏（无窗口，屏幕零变化）
+    """
+    mode = cfg.get("capture_mode", "region")
+    if mode == "region":
+        return capture_region()
+    if mode == "fixed":
+        bbox = cfg.get("capture_bbox")
+        if bbox:
+            return capture_fixed(bbox)
+        print("⚠️ capture_mode=fixed 但没配 capture_bbox，已改用全屏截图。"
+              "先跑 python tools/pick_region.py 校准。")
+    return capture_fullscreen()
