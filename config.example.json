@@ -13,8 +13,10 @@
     "secret": "在此填入机器人 secret",
     "ws_url": "wss://openws.work.weixin.qq.com"
   },
+  "trigger": "click",
+  "_trigger_note": "click=连点三下鼠标定左上角、再连点三下定右下角（默认，无需快捷键）；hotkey=按快捷键触发，再用 capture_mode 框选",
   "hotkey": "ctrl+alt+s",
-  "_hotkey_note": "可单键也可组合，如 f8 / alt+s / ctrl+alt+s。单键只用 F1–F12，别填字母数字（会全局劫持输入）",
+  "_hotkey_note": "仅 trigger=hotkey 时生效。可单键也可组合，如 f8 / alt+s / ctrl+alt+s。单键只用 F1–F12，别填字母数字（会全局劫持输入）",
   "capture_mode": "region",
   "_capture_mode_note": "region=框选（有半透明遮罩）；blind=盲拖，每次框选但屏幕零变化；fixed=固定区域，屏幕零变化，需 capture_bbox；fullscreen=全屏，屏幕零变化",
   "capture_bbox": null,

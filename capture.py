@@ -9,11 +9,13 @@ fixed / fullscreen 全程不弹窗、不抢焦点，屏幕看不出任何变化�
 """
 import ctypes
 import ctypes.wintypes
+import queue
 import time
 import tkinter as tk
 from typing import Optional
 
 from PIL import Image, ImageGrab
+from pynput import mouse
 
 # 遮罩窗口最长存活时间：忘按/误触快捷键时自动关闭，避免窗口赖在屏幕上不走
 TIMEOUT_MS = 20_000
@@ -96,6 +98,59 @@ def wait_drag() -> Optional[tuple]:
     if right - left < 5 or bottom - top < 5:
         return None
     return (left, top, right, bottom)
+
+
+# 三连点判定：相邻两下的最大间隔、允许的手抖像素
+TRIPLE_GAP_S = 0.6
+TRIPLE_RADIUS = 8
+
+
+class TripleClickDetector:
+    """把连续「左键按下」判成三连点，命中时返回第一下的坐标。"""
+
+    def __init__(self, gap: float = TRIPLE_GAP_S, radius: int = TRIPLE_RADIUS) -> None:
+        self.gap = gap
+        self.radius = radius
+        self.clicks = []          # [(时间, x, y), ...]
+
+    def feed(self, now: float, x: int, y: int) -> Optional[tuple]:
+        # 只看相邻两下的间隔：隔太久说明是新一轮点击，重新计数
+        if self.clicks and now - self.clicks[-1][0] > self.gap:
+            self.clicks = []
+        self.clicks.append((now, int(x), int(y)))
+        if len(self.clicks) < 3:
+            return None
+        x0, y0 = self.clicks[0][1], self.clicks[0][2]
+        hit = all(abs(c[1] - x0) <= self.radius and abs(c[2] - y0) <= self.radius
+                  for c in self.clicks[:3])
+        self.clicks = []          # 无论命中与否都重新开始计数
+        return (x0, y0) if hit else None
+
+    def reset(self) -> None:
+        self.clicks = []
+
+
+def triple_click_listener(points: "queue.Queue") -> "mouse.Listener":
+    """全局监听鼠标（不创建窗口、不抢焦点、屏幕零变化）。
+
+    每连点三下把坐标 (x, y) 放进 points；右键放 None，表示取消本次框选。
+    坐标是物理像素 —— 先在构造监听器前做 DPI 感知，避免高分屏错位。
+    """
+    _setup_dpi_awareness()
+    detector = TripleClickDetector()
+
+    def on_click(x, y, button, pressed):
+        if not pressed:
+            return
+        if button == mouse.Button.right:
+            detector.reset()
+            points.put(None)
+        elif button == mouse.Button.left:
+            hit = detector.feed(time.time(), x, y)
+            if hit:
+                points.put(hit)
+
+    return mouse.Listener(on_click=on_click)
 
 
 def pick_bbox(sw: Optional[int] = None, sh: Optional[int] = None) -> Optional[tuple]:

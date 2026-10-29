@@ -1,14 +1,19 @@
-"""主入口：企微长连接机器人 + 快捷键截图 → 视觉分析 → 回复到企微会话。
+"""主入口：企微长连接机器人 + 截图 → 视觉分析 → 回复到企微会话。
+
+触发方式（config 的 trigger）：
+  click  连点三下鼠标 = 截图框左上角，再连点三下 = 右下角，然后截这一块（默认）
+  hotkey 按快捷键触发，再按 capture_mode 框选 / 固定区域 / 全屏
 
 架构：
   - 后台线程：企微 WebSocket 长连接（收消息、心跳、绑定会话）
-  - 后台线程：pynput 全局快捷键监听
-  - 主线程：轮询快捷键信号 → 在主线程执行 tkinter 框选截图 → 起后台线程调模型 + 推送企微
-（tkinter 必须在主线程创建，所以截图在主线程做。）
+  - 后台线程：pynput 全局鼠标（或键盘）监听
+  - 主线程：轮询角点/快捷键信号 → 截图 → 起后台线程调模型 + 推送企微
+（tkinter 必须在主线程创建，所以 hotkey + region 模式的截图在主线程做。）
 """
 import io
 import json
 import os
+import queue
 import threading
 import time
 
@@ -51,6 +56,7 @@ def load_config() -> dict:
     m.setdefault("max_tokens", 1536)
     m.setdefault("max_side", 960)
     m.setdefault("system_prompt", "你是专业的笔试/面试解题助手。请仔细阅读图片中的题目，给出准确、简洁的答案，并附上简要的解题思路或解析。")
+    cfg.setdefault("trigger", "click")
     cfg.setdefault("hotkey", "ctrl+alt+s")
     cfg.setdefault("capture_mode", "region")
     cfg.setdefault("user_prompt", "请分析这张截图中的题目并作答。")
@@ -60,6 +66,8 @@ def load_config() -> dict:
 # 从进入处理到答案发出，硬上限 60 秒；留 2 秒余量给企微发送
 DEADLINE_S = 60
 SEND_RESERVE_S = 2
+# 确认左上角后，等第二次连点的最长时间
+SECOND_CORNER_TIMEOUT_S = 15
 
 
 def process_and_reply(bot: WeComBot, cfg: dict, img) -> None:
@@ -144,6 +152,7 @@ def process_and_reply(bot: WeComBot, cfg: dict, img) -> None:
 def main() -> None:
     cfg = load_config()
     wb = cfg["wecom_bot"]
+    trigger = cfg.get("trigger", "click")
 
     # 启动企微长连接
     bot = WeComBot(wb["bot_id"], wb["secret"], wb.get("ws_url", "wss://openws.work.weixin.qq.com"))
@@ -154,33 +163,72 @@ def main() -> None:
     def wait_chat():
         chat = bot.wait_for_chat()
         if chat:
-            print(f"✅ 会话已绑定（target={chat[0]}）。按 {cfg['hotkey']} 截图提问；Ctrl+C 退出。")
+            tip = f"按 {cfg['hotkey']} 截图" if trigger == "hotkey" else "连点三下鼠标框选"
+            print(f"✅ 会话已绑定（target={chat[0]}）。{tip}提问；Ctrl+C 退出。")
     threading.Thread(target=wait_chat, daemon=True).start()
 
-    # 快捷键信号队列
+    # 快捷键信号 / 三连点坐标
     signals = []
+    points: queue.Queue = queue.Queue()
 
     def on_hotkey():
         signals.append(1)
 
-    listener = keyboard.GlobalHotKeys({_pynput_hotkey(cfg["hotkey"]): on_hotkey})
+    if trigger == "hotkey":
+        listener = keyboard.GlobalHotKeys({_pynput_hotkey(cfg["hotkey"]): on_hotkey})
+        print(f"⏳ 等待企微认证与首次会话 ...（按 {cfg['hotkey']} 截图）")
+    else:
+        listener = capture.triple_click_listener(points)
+        print("👆 连点三下鼠标 = 截图框左上角，再连点三下 = 右下角；右键取消本次")
+        print("⏳ 等待企微认证与首次会话 ...（先在企微里给机器人发条消息）")
     listener.start()
 
-    print(f"⏳ 等待企微认证与首次会话 ...（先在企微里给机器人发条消息）")
+    corner = None   # 已确认的左上角：(x, y, 确认时间)
 
     try:
         while True:
-            if signals:
+            img = None
+            if trigger == "hotkey":
+                if not signals:
+                    time.sleep(0.01)
+                    continue
                 signals.pop()
                 # 截图必须在主线程做（tkinter）
                 img = capture.grab(cfg)
-                if img is None:
-                    print("已取消截图。\n")
+            else:
+                try:
+                    pt = points.get_nowait()
+                except queue.Empty:
+                    if corner and time.time() - corner[2] > SECOND_CORNER_TIMEOUT_S:
+                        corner = None
+                        print(f"⏱ {SECOND_CORNER_TIMEOUT_S} 秒内没确认右下角，已取消本次框选。")
+                    time.sleep(0.01)
                     continue
-                print(f"截图尺寸: {img.size}")
-                # 模型调用 + 推送放到后台线程，不阻塞主线程
-                threading.Thread(target=process_and_reply, args=(bot, cfg, img), daemon=True).start()
-            time.sleep(0.01)  # 尽快响应快捷键：盲拖模式没有视觉提示，慢了就漏掉起手按下
+                if pt is None:                     # 右键取消
+                    corner = None
+                    print("已取消本次框选。")
+                    continue
+                if corner is None:                 # 第一次连点 → 左上角
+                    corner = (pt[0], pt[1], time.time())
+                    print(f"📍 左上角 ({pt[0]}, {pt[1]})，再连点三下确认右下角 ...")
+                    continue
+                x1, y1, _ = corner
+                corner = None
+                bbox = (min(x1, pt[0]), min(y1, pt[1]),
+                        max(x1, pt[0]), max(y1, pt[1]))
+                if bbox[2] - bbox[0] < 10 or bbox[3] - bbox[1] < 10:
+                    print("选区太小，已忽略。")
+                    continue
+                print(f"📍 右下角 ({pt[0]}, {pt[1]})，区域 {bbox}")
+                img = capture.capture_fixed(bbox)
+
+            if img is None:
+                print("已取消截图。\n")
+                continue
+            print(f"截图尺寸: {img.size}")
+            # 模型调用 + 推送放到后台线程，不阻塞主线程
+            threading.Thread(target=process_and_reply, args=(bot, cfg, img), daemon=True).start()
+            time.sleep(0.01)
     except KeyboardInterrupt:
         print("\n已退出。")
     finally:
